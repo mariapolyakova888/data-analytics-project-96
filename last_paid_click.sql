@@ -1,24 +1,24 @@
 --Шаг 2. Запрос для витрины по модели атрибуции лидов Last Paid Click:
 with last_touch as (
-    select distinct on (s.visitor_id)
-        s.visitor_id,
-        max(s.visit_date) as visit_date,
-        s.source as utm_source,
-        s.medium as utm_medium,
-        s.campaign as utm_campaign
-    from sessions as s
+    select distinct on (visitor_id)
+        visitor_id,
+        max(visit_date) as visit_date,
+        source,
+        medium,
+        campaign
+    from sessions
     where
-        s.medium != 'organic'
-    group by 1, s.visit_date, 3, 4, 5
-    order by s.visitor_id, s.visit_date desc
+        medium != 'organic'
+    group by visitor_id, visit_date, source, medium, campaign
+    order by visitor_id, visit_date desc
 )
 
 select
     last_touch.visitor_id,
     last_touch.visit_date,
-    last_touch.utm_source,
-    last_touch.utm_medium,
-    last_touch.utm_campaign,
+    last_touch.source as utm_source,
+    last_touch.medium as utm_medium,
+    last_touch.campaign as utm_campaign,
     l.lead_id,
     l.created_at,
     l.amount,
@@ -28,6 +28,6 @@ from last_touch
 left join leads as l
     on
         last_touch.visitor_id = l.visitor_id
-        and last_touch.utm_medium != 'organic'
-group by 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-order by 8 desc nulls last, 2, 3, 4, 5 asc;
+order by
+    l.amount desc nulls last,
+    last_touch.visit_date, utm_source, utm_medium, utm_campaign asc;

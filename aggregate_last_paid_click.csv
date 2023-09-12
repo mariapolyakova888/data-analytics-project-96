@@ -1,16 +1,16 @@
 visit_date,utm_source,utm_medium,utm_campaign,visitors_count,total_cost,leads_count,purchases_count,revenue
-2023-06-01 00:00:00.000,yandex,cpc,prof-frontend,1,57 138,1,1,237 990
-2023-06-01 00:00:00.000,yandex,cpc,freemium,2,43 308,2,2,232 766
-2023-06-01 00:00:00.000,yandex,cpc,base-frontend,1,18 061,1,1,201 150
-2023-06-01 00:00:00.000,vk,cpc,freemium-frontend,1,3 160,1,1,189 210
-2023-06-01 00:00:00.000,yandex,cpc,freemium,1,21 654,1,1,188 991
-2023-06-01 00:00:00.000,yandex,cpc,prof-frontend,1,57 138,1,1,180 306
-2023-06-01 00:00:00.000,vk,cpc,prof-java,1,3 115,1,1,178 800
-2023-06-01 00:00:00.000,yandex,cpc,prof-frontend,1,57 138,1,1,167 625
-2023-06-01 00:00:00.000,yandex,cpc,base-python,1,12 524,1,1,160 920
-2023-06-20 00:00:00.000,telegram,cpp,base-java,1,0,1,1,151 192
-2023-06-01 00:00:00.000,yandex,cpc,dod-php,1,5 964,1,1,150 255
-2023-06-01 00:00:00.000,yandex,cpc,prof-data-analytics,1,10 086,1,1,144 244
-2023-06-01 00:00:00.000,yandex,cpc,base-professions-retarget,1,151,1,1,134 100
-2023-06-01 00:00:00.000,yandex,cpc,freemium,1,21 654,1,1,134 100
-2023-06-01 00:00:00.000,yandex,cpc,prof-python,1,33 026,1,1,134 100
+2023-06-01,yandex,cpc,freemium,103,21 654,100,25,1 654 810
+2023-06-01,yandex,cpc,prof-frontend,78,57 138,73,12,1 057 000
+2023-06-01,yandex,cpc,prof-python,62,33 026,61,7,613 196
+2023-06-01,yandex,cpc,base-python,31,12 524,28,7,476 021
+2023-06-01,vk,cpc,prof-python,71,2 028,40,5,355 564
+2023-06-01,vk,cpc,freemium-frontend,80,3 160,43,5,338 083
+2023-06-01,yandex,cpc,prof-java,49,29 490,49,4,284 590
+2023-06-01,yandex,cpc,prof-professions-brand,13,4 818,13,3,154 287
+2023-06-01,yandex,cpc,base-frontend,40,18 061,39,3,268 515
+2023-06-01,vk,cpc,prof-java,51,3 115,23,2,232 726
+2023-06-01,yandex,cpc,prof-data-analytics,14,10 086,14,2,220 264
+2023-06-01,yandex,cpc,base-professions-retarget,4,151,4,1,134 100
+2023-06-01,yandex,cpc,dod-php,4,5 964,4,1,150 255
+2023-06-07,vk,social,hexlet-blog,3,0,1,1,84 000
+2023-06-20,telegram,cpp,base-java,3,0,1,1,151 192

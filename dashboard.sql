@@ -1,0 +1,935 @@
+
+--Посещения по беспл, платн каналам в разрезе за июнь в динамике по дням
+select
+    to_char(visit_date, 'DD-MM-YYYY') as visit_date,
+    case
+        when medium = 'organic' then 'organic'
+        when medium != 'organic' then 'paid_channel'
+    end as channel,
+    count(visitor_id) as visitors_count
+from sessions
+group by 1, 2
+order by 1, 2, 3;
+
+--Посещения по платн каналам в разрезе источников для pie chart
+select
+    to_char(visit_date, 'month-YYYY') as visit_month,
+    source,
+    count(visitor_id) as visitors_count
+from sessions
+where medium != 'organic'
+group by 1, 2
+order by 1, 2;
+
+--Посещения по беспл каналам в разрезе источников для pie chart
+select
+    to_char(visit_date, 'month-YYYY') as visit_month,
+    source,
+    count(visitor_id) as visitors_count
+from sessions
+where medium = 'organic'
+group by 1, 2
+order by 1, 2;
+
+-- Расчет метрик cpu, cpl, cppu, roi по vk, ya за июнь 2023 г.
+with t as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+),
+
+last_paid_click as (
+    select *
+    from t
+    order by
+        amount desc nulls last,
+        visit_date asc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+last_paid_click_revenue as (
+    select
+        date_trunc('day', visit_date)::date as visit_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        count(visitor_id) as visitors_count,
+        count(lead_id) as leads_count,
+        count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count,
+        sum(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then amount
+            end
+        ) as revenue
+    from last_paid_click
+    group by
+        date_trunc('day', visit_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    order by
+        revenue desc nulls last,
+        visit_date asc,
+        visitors_count desc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+vk as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from vk_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+ya as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from ya_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+), lpcr as (
+	select
+    	lpcr.visit_date,
+    	lpcr.utm_source,
+    	lpcr.utm_medium,
+    	lpcr.utm_campaign,
+    	lpcr.visitors_count,
+    	lpcr.leads_count,
+    	lpcr.purchases_count,
+    	lpcr.revenue,
+    	coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+	from last_paid_click_revenue as lpcr
+	left join vk
+    	on
+        	lpcr.visit_date = vk.campaign_date
+        	and lpcr.utm_source = vk.utm_source
+        	and lpcr.utm_medium = vk.utm_medium
+        	and lpcr.utm_campaign = vk.utm_campaign
+	left join ya
+    	on
+        	lpcr.visit_date = ya.campaign_date
+        	and lpcr.utm_source = ya.utm_source
+        	and lpcr.utm_medium = ya.utm_medium
+        	and lpcr.utm_campaign = ya.utm_campaign
+)
+
+select
+    lpcr.utm_source,
+    round(sum(lpcr.total_cost) / sum(lpcr.visitors_count), 2) as cpu,
+    round(sum(lpcr.total_cost) / sum(lpcr.leads_count), 2) as cpl,
+    round(sum(lpcr.total_cost) / sum(lpcr.purchases_count), 2) as cppu,
+    round(sum(lpcr.revenue - lpcr.total_cost) / sum(lpcr.total_cost) * 100, 2) as roi
+from lpcr
+where lpcr.total_cost != 0
+group by 1
+order by 1;
+
+--Кол-во успешных продаж после (во время) визита
+select
+    count(
+        case
+            when
+                closing_reason = 'Успешная продажа' or status_id = 142
+                then lead_id
+        end
+    ) as purchases_count
+from sessions as s
+left join leads as l
+    on
+        s.visitor_id = l.visitor_id
+        and s.visit_date <= l.created_at;
+    
+--Количество зарегистрированных пользователей
+select count(distinct l.lead_id) as leads_count
+from sessions as s
+left join leads as l
+    on s.visitor_id = l.visitor_id;
+
+--Воронка продаж по модели Last Paid Click
+with t as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+),
+
+last_paid_click as (
+    select *
+    from t
+    order by
+        amount desc nulls last,
+        visit_date asc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+last_paid_click_revenue as (
+    select
+        date_trunc('day', visit_date)::date as visit_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        count(visitor_id) as visitors_count,
+        count(lead_id) as leads_count,
+        count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count,
+        sum(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then amount
+            end
+        ) as revenue
+    from last_paid_click
+    group by
+        date_trunc('day', visit_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    order by
+        revenue desc nulls last,
+        visit_date asc,
+        visitors_count desc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+vk as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from vk_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+ya as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from ya_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+lpcr as (
+    select
+        lpcr.visit_date,
+        lpcr.utm_source,
+        lpcr.utm_medium,
+        lpcr.utm_campaign,
+        lpcr.visitors_count,
+        lpcr.leads_count,
+        lpcr.purchases_count,
+        lpcr.revenue,
+        coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+    from last_paid_click_revenue as lpcr
+    left join vk
+        on
+            lpcr.visit_date = vk.campaign_date
+            and lpcr.utm_source = vk.utm_source
+            and lpcr.utm_medium = vk.utm_medium
+            and lpcr.utm_campaign = vk.utm_campaign
+    left join ya
+        on
+            lpcr.visit_date = ya.campaign_date
+            and lpcr.utm_source = ya.utm_source
+            and lpcr.utm_medium = ya.utm_medium
+            and lpcr.utm_campaign = ya.utm_campaign
+)
+
+select
+    round((sum(lpcr.visitors_count::numeric)), 0) as visits,
+    round((sum(lpcr.leads_count::numeric)), 0) as leads,
+    round((sum(lpcr.purchases_count::numeric)), 0) as purchases
+from lpcr;
+
+--Расходы на рекламу по платным каналам в динамике
+with t as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+),
+
+last_paid_click as (
+    select *
+    from t
+    order by
+        amount desc nulls last,
+        visit_date asc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+last_paid_click_revenue as (
+    select
+        date_trunc('day', visit_date)::date as visit_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        count(visitor_id) as visitors_count,
+        count(lead_id) as leads_count,
+        count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count,
+        sum(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then amount
+            end
+        ) as revenue
+    from last_paid_click
+    group by
+        date_trunc('day', visit_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    order by
+        revenue desc nulls last,
+        visit_date asc,
+        visitors_count desc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+vk as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from vk_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+ya as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from ya_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+), lpcr as (
+	select
+    	lpcr.visit_date,
+    	lpcr.utm_source,
+    	lpcr.utm_medium,
+    	lpcr.utm_campaign,
+    	lpcr.visitors_count,
+    	lpcr.leads_count,
+    	lpcr.purchases_count,
+    	lpcr.revenue,
+    	coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+	from last_paid_click_revenue as lpcr
+	left join vk
+    	on
+        	lpcr.visit_date = vk.campaign_date
+        	and lpcr.utm_source = vk.utm_source
+        	and lpcr.utm_medium = vk.utm_medium
+        	and lpcr.utm_campaign = vk.utm_campaign
+	left join ya
+    	on
+        	lpcr.visit_date = ya.campaign_date
+        	and lpcr.utm_source = ya.utm_source
+        	and lpcr.utm_medium = ya.utm_medium
+        	and lpcr.utm_campaign = ya.utm_campaign
+)
+
+select
+    lpcr.visit_date,
+    lpcr.utm_source,
+    sum(lpcr.total_cost) as total_cost
+from lpcr
+where lpcr.total_cost != 0
+group by 1, 2
+order by 1, 2;
+
+--Расчет roi за июнь 2023 г. общий по модели Last Paid Click
+with t as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+),
+
+last_paid_click as (
+    select *
+    from t
+    order by
+        amount desc nulls last,
+        visit_date asc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+last_paid_click_revenue as (
+    select
+        date_trunc('day', visit_date)::date as visit_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        count(visitor_id) as visitors_count,
+        count(lead_id) as leads_count,
+        count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count,
+        sum(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then amount
+            end
+        ) as revenue
+    from last_paid_click
+    group by
+        date_trunc('day', visit_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    order by
+        revenue desc nulls last,
+        visit_date asc,
+        visitors_count desc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+vk as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from vk_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+ya as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from ya_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+), lpcr as (
+	select
+    	lpcr.visit_date,
+    	lpcr.utm_source,
+    	lpcr.utm_medium,
+    	lpcr.utm_campaign,
+    	lpcr.visitors_count,
+    	lpcr.leads_count,
+    	lpcr.purchases_count,
+    	lpcr.revenue,
+    	coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+	from last_paid_click_revenue as lpcr
+	left join vk
+    	on
+        	lpcr.visit_date = vk.campaign_date
+        	and lpcr.utm_source = vk.utm_source
+        	and lpcr.utm_medium = vk.utm_medium
+        	and lpcr.utm_campaign = vk.utm_campaign
+	left join ya
+    	on
+        	lpcr.visit_date = ya.campaign_date
+        	and lpcr.utm_source = ya.utm_source
+        	and lpcr.utm_medium = ya.utm_medium
+        	and lpcr.utm_campaign = ya.utm_campaign
+)
+
+select
+    to_char(lpcr.visit_date, 'MM-YYYY') as visit_month,
+    sum(lpcr.revenue) as revenue,
+    sum(lpcr.total_cost) as total_costs,
+    round(sum(lpcr.revenue - lpcr.total_cost) *100 / sum(lpcr.total_cost), 2) as roi
+from lpcr
+group by 1
+order by 1;
+
+--Количество успешных сделок за июнь 2023 г.
+select sum(purchases_count) as count_purchases
+from aggregate_costs_mplkv
+group by date_trunc('month', visit_date);
+
+--Создание представления - модель Last Paid Click
+create view last_paid_click_mplkv as
+with last_paid_click as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l on s.visitor_id = l.visitor_id
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+)
+
+select *
+from last_paid_click
+order by
+    amount desc nulls last,
+    visit_date asc,
+    utm_source asc,
+    utm_medium asc,
+    utm_campaign asc;
+
+--Доходы и расходы за июнь 2023 г.
+select
+    sum(total_cost) as total_cost,
+    sum(revenue) as revenue
+from aggregate_costs_mplkv
+group by date_trunc('month', visit_date);
+
+--Расчет конверсии из клика в лида, в продажу, всей воронки
+with tab as (
+select
+    date_trunc('month', s.visit_date)::date as visit_date,
+    count(distinct s.visitor_id) as visitors_count,
+    count(l.lead_id) as leads_count,
+    count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count
+from sessions s
+left join leads l
+on s.visitor_id = l.visitor_id and s.visit_date <= l.created_at
+group by 1
+)
+select
+    round((leads_count::numeric / visitors_count::numeric) * 100, 3) as lcr,
+    round((purchases_count::numeric / leads_count::numeric) * 100, 3) as pcr,
+    round((purchases_count::numeric / visitors_count::numeric) * 100, 3) as conversion
+from tab;
+
+--Расчет cpu, cpl, cppu, roi
+with t as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+),
+
+last_paid_click as (
+    select *
+    from t
+    order by
+        amount desc nulls last,
+        visit_date asc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+last_paid_click_revenue as (
+    select
+        date_trunc('day', visit_date)::date as visit_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        count(visitor_id) as visitors_count,
+        count(lead_id) as leads_count,
+        count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count,
+        sum(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then amount
+            end
+        ) as revenue
+    from last_paid_click
+    group by
+        date_trunc('day', visit_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    order by
+        revenue desc nulls last,
+        visit_date asc,
+        visitors_count desc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+vk as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from vk_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+ya as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from ya_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+lpcr as (
+    select
+        lpcr.visit_date,
+        lpcr.utm_source,
+        lpcr.utm_medium,
+        lpcr.utm_campaign,
+        lpcr.visitors_count,
+        lpcr.leads_count,
+        lpcr.purchases_count,
+        lpcr.revenue,
+        coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+    from last_paid_click_revenue as lpcr
+    left join vk
+        on
+            lpcr.visit_date = vk.campaign_date
+            and lpcr.utm_source = vk.utm_source
+            and lpcr.utm_medium = vk.utm_medium
+            and lpcr.utm_campaign = vk.utm_campaign
+    left join ya
+        on
+            lpcr.visit_date = ya.campaign_date
+            and lpcr.utm_source = ya.utm_source
+            and lpcr.utm_medium = ya.utm_medium
+            and lpcr.utm_campaign = ya.utm_campaign
+)
+
+select
+    round((sum(lpcr.total_cost)/sum(lpcr.visitors_count::numeric)), 0) as cpu,
+    round((sum(lpcr.total_cost)/sum(lpcr.leads_count::numeric)), 0) as cpl,
+    round((sum(lpcr.total_cost)/sum(lpcr.purchases_count::numeric)), 0) as cppu,
+    round(((sum(lpcr.revenue) - sum(lpcr.total_cost))/sum(lpcr.total_cost)), 0) as roi
+from lpcr;
+
+--Создание представления aggregate_costs_mplkv
+create view aggregate_costs_mplkv as
+with t as (
+    select distinct on (s.visitor_id)
+        s.visitor_id,
+        s.visit_date,
+        s.source as utm_source,
+        s.medium as utm_medium,
+        s.campaign as utm_campaign,
+        l.lead_id,
+        l.created_at,
+        l.amount,
+        l.closing_reason,
+        l.status_id
+    from sessions as s
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
+    where s.medium != 'organic'
+    order by s.visitor_id asc, s.visit_date desc
+),
+
+last_paid_click as (
+    select *
+    from t
+    order by
+        amount desc nulls last,
+        visit_date asc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+last_paid_click_revenue as (
+    select
+        date_trunc('day', visit_date)::date as visit_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        count(visitor_id) as visitors_count,
+        count(lead_id) as leads_count,
+        count(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then lead_id
+            end
+        ) as purchases_count,
+        sum(
+            case
+                when
+                    closing_reason = 'Успешная продажа' or status_id = 142
+                    then amount
+            end
+        ) as revenue
+    from last_paid_click
+    group by
+        date_trunc('day', visit_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+    order by
+        revenue desc nulls last,
+        visit_date asc,
+        visitors_count desc,
+        utm_source asc,
+        utm_medium asc,
+        utm_campaign asc
+),
+
+vk as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from vk_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+),
+
+ya as (
+    select
+        date_trunc('day', campaign_date)::date as campaign_date,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        sum(daily_spent) as daily_spent
+    from ya_ads
+    where utm_medium != 'organic'
+    group by
+        date_trunc('day', campaign_date)::date,
+        utm_source,
+        utm_medium,
+        utm_campaign
+)
+
+select
+    lpcr.visit_date,
+    lpcr.utm_source,
+    lpcr.utm_medium,
+    lpcr.utm_campaign,
+    lpcr.visitors_count,
+    lpcr.leads_count,
+    lpcr.purchases_count,
+    lpcr.revenue,
+    coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+from last_paid_click_revenue as lpcr
+left join vk
+    on
+        lpcr.visit_date = vk.campaign_date
+        and lpcr.utm_source = vk.utm_source
+        and lpcr.utm_medium = vk.utm_medium
+        and lpcr.utm_campaign = vk.utm_campaign
+left join ya
+    on
+        lpcr.visit_date = ya.campaign_date
+        and lpcr.utm_source = ya.utm_source
+        and lpcr.utm_medium = ya.utm_medium
+        and lpcr.utm_campaign = ya.utm_campaign;
+
+--За сколько дней с момента перехода по рекламе закрывается 90% лидов
+select percentile_disc(0.9) within group (order by (created_at - visit_date))
+from last_paid_click_mplkv
+where closing_reason = 'Успешная продажа' or status_id = 142;
+
+--Динамика валового дохода с платных каналов vk, yandex за июнь 2023 г.:
+select
+    visit_date,
+    utm_source,
+    coalesce(sum(revenue), 0) as revenue
+from aggregate_costs_mplkv
+where total_cost != 0
+group by visit_date, utm_source;

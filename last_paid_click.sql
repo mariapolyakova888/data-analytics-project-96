@@ -13,7 +13,10 @@ with last_paid_click as (
         l.closing_reason,
         l.status_id
     from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
     where s.medium != 'organic'
     order by s.visitor_id asc, s.visit_date desc
 )

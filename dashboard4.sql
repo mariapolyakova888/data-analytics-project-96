@@ -1,4 +1,5 @@
--- Шаг 3. Построим витрину по расчету расходов на рекламу
+--Создание представления aggregate_costs_mplkv
+create view aggregate_costs_mplkv as
 with t as (
     select distinct on (s.visitor_id)
         s.visitor_id,
@@ -102,10 +103,10 @@ ya as (
 
 select
     lpcr.visit_date,
-    lpcr.visitors_count,
     lpcr.utm_source,
     lpcr.utm_medium,
     lpcr.utm_campaign,
+    lpcr.visitors_count,
     lpcr.leads_count,
     lpcr.purchases_count,
     lpcr.revenue,
@@ -123,3 +124,17 @@ left join ya
         and lpcr.utm_source = ya.utm_source
         and lpcr.utm_medium = ya.utm_medium
         and lpcr.utm_campaign = ya.utm_campaign;
+
+--За сколько дней с момента перехода по рекламе закрывается 90% лидов
+select percentile_disc(0.9) within group (order by (created_at - visit_date))
+from last_paid_click_mplkv
+where closing_reason = 'Успешная продажа' or status_id = 142;
+
+--Динамика валового дохода с платных каналов vk, yandex за июнь 2023 г.:
+select
+    visit_date,
+    utm_source,
+    coalesce(sum(revenue), 0) as revenue
+from aggregate_costs_mplkv
+where total_cost != 0
+group by visit_date, utm_source;

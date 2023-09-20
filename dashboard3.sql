@@ -1,4 +1,4 @@
--- Шаг 3. Построим витрину по расчету расходов на рекламу
+--Расчет roi за июнь 2023 г. общий по модели Last Paid Click
 with t as (
     select distinct on (s.visitor_id)
         s.visitor_id,
@@ -98,28 +98,46 @@ ya as (
         utm_source,
         utm_medium,
         utm_campaign
+),
+
+lpcr as (
+	select
+    	lpcr.visit_date,
+    	lpcr.utm_source,
+    	lpcr.utm_medium,
+    	lpcr.utm_campaign,
+    	lpcr.visitors_count,
+    	lpcr.leads_count,
+    	lpcr.purchases_count,
+    	lpcr.revenue,
+    	coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+	from last_paid_click_revenue as lpcr
+	left join vk
+    	on
+        	lpcr.visit_date = vk.campaign_date
+        	and lpcr.utm_source = vk.utm_source
+        	and lpcr.utm_medium = vk.utm_medium
+        	and lpcr.utm_campaign = vk.utm_campaign
+	left join ya
+    	on
+        	lpcr.visit_date = ya.campaign_date
+        	and lpcr.utm_source = ya.utm_source
+        	and lpcr.utm_medium = ya.utm_medium
+        	and lpcr.utm_campaign = ya.utm_campaign
 )
 
 select
-    lpcr.visit_date,
-    lpcr.visitors_count,
-    lpcr.utm_source,
-    lpcr.utm_medium,
-    lpcr.utm_campaign,
-    lpcr.leads_count,
-    lpcr.purchases_count,
-    lpcr.revenue,
-    coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
-from last_paid_click_revenue as lpcr
-left join vk
-    on
-        lpcr.visit_date = vk.campaign_date
-        and lpcr.utm_source = vk.utm_source
-        and lpcr.utm_medium = vk.utm_medium
-        and lpcr.utm_campaign = vk.utm_campaign
-left join ya
-    on
-        lpcr.visit_date = ya.campaign_date
-        and lpcr.utm_source = ya.utm_source
-        and lpcr.utm_medium = ya.utm_medium
-        and lpcr.utm_campaign = ya.utm_campaign;
+    to_char(lpcr.visit_date, 'MM-YYYY') as visit_month,
+    sum(lpcr.revenue) as revenue,
+    sum(lpcr.total_cost) as total_costs,
+    round(
+        sum(lpcr.revenue - lpcr.total_cost) * 100 / sum(lpcr.total_cost), 2
+    ) as roi
+from lpcr
+group by 1
+order by 1;
+
+--Количество успешных сделок за июнь 2023 г.
+select sum(purchases_count) as count_purchases
+from aggregate_costs_mplkv
+group by date_trunc('month', visit_date);

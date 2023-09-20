@@ -13,23 +13,23 @@ order by 1, 2, 3;
 
 --Посещения по платн каналам в разрезе источников для pie chart
 select
-    to_char(visit_date, 'month-YYYY') as visit_month,
     source,
+    to_char(visit_date, 'month-YYYY') as visit_month,
     count(visitor_id) as visitors_count
 from sessions
 where medium != 'organic'
-group by 1, 2
-order by 1, 2;
+group by to_char(visit_date, 'month-YYYY'), source
+order by to_char(visit_date, 'month-YYYY'), source;
 
 --Посещения по беспл каналам в разрезе источников для pie chart
 select
-    to_char(visit_date, 'month-YYYY') as visit_month,
     source,
+    to_char(visit_date, 'month-YYYY') as visit_month,
     count(visitor_id) as visitors_count
 from sessions
 where medium = 'organic'
-group by 1, 2
-order by 1, 2;
+group by to_char(visit_date, 'month-YYYY'), source
+order by to_char(visit_date, 'month-YYYY'), source;
 
 -- Расчет метрик cpu, cpl, cppu, roi по vk, ya за июнь 2023 г.
 with t as (
@@ -162,7 +162,9 @@ select
     round(sum(lpcr.total_cost) / sum(lpcr.visitors_count), 2) as cpu,
     round(sum(lpcr.total_cost) / sum(lpcr.leads_count), 2) as cpl,
     round(sum(lpcr.total_cost) / sum(lpcr.purchases_count), 2) as cppu,
-    round(sum(lpcr.revenue - lpcr.total_cost) / sum(lpcr.total_cost) * 100, 2) as roi
+    round(
+        sum(lpcr.revenue - lpcr.total_cost) / sum(lpcr.total_cost) * 100, 2
+    ) as roi
 from lpcr
 where lpcr.total_cost != 0
 group by 1
@@ -173,8 +175,8 @@ select
     count(
         case
             when
-                closing_reason = 'Успешная продажа' or status_id = 142
-                then lead_id
+                l.closing_reason = 'Успешная продажа' or l.status_id = 142
+                then l.lead_id
         end
     ) as purchases_count
 from sessions as s
@@ -423,7 +425,9 @@ ya as (
         utm_source,
         utm_medium,
         utm_campaign
-), lpcr as (
+),
+
+lpcr as (
 	select
     	lpcr.visit_date,
     	lpcr.utm_source,
@@ -558,7 +562,9 @@ ya as (
         utm_source,
         utm_medium,
         utm_campaign
-), lpcr as (
+),
+
+lpcr as (
 	select
     	lpcr.visit_date,
     	lpcr.utm_source,
@@ -588,7 +594,9 @@ select
     to_char(lpcr.visit_date, 'MM-YYYY') as visit_month,
     sum(lpcr.revenue) as revenue,
     sum(lpcr.total_cost) as total_costs,
-    round(sum(lpcr.revenue - lpcr.total_cost) *100 / sum(lpcr.total_cost), 2) as roi
+    round(
+        sum(lpcr.revenue - lpcr.total_cost) * 100 / sum(lpcr.total_cost), 2
+    ) as roi
 from lpcr
 group by 1
 order by 1;
@@ -636,26 +644,29 @@ group by date_trunc('month', visit_date);
 
 --Расчет конверсии из клика в лида, в продажу, всей воронки
 with tab as (
-select
-    date_trunc('month', s.visit_date)::date as visit_date,
-    count(distinct s.visitor_id) as visitors_count,
-    count(l.lead_id) as leads_count,
-    count(
+    select
+        date_trunc('month', s.visit_date)::date as visit_date,
+        count(distinct s.visitor_id) as visitors_count,
+        count(l.lead_id) as leads_count,
+        count(
             case
                 when
-                    closing_reason = 'Успешная продажа' or status_id = 142
-                    then lead_id
+                    l.closing_reason = 'Успешная продажа' or l.status_id = 142
+                    then l.lead_id
             end
         ) as purchases_count
-from sessions s
-left join leads l
-on s.visitor_id = l.visitor_id and s.visit_date <= l.created_at
-group by 1
+    from sessions as s
+    left join leads as l
+        on s.visitor_id = l.visitor_id and s.visit_date <= l.created_at
+    group by 1
 )
+
 select
-    round((leads_count::numeric / visitors_count::numeric) * 100, 3) as lcr,
-    round((purchases_count::numeric / leads_count::numeric) * 100, 3) as pcr,
-    round((purchases_count::numeric / visitors_count::numeric) * 100, 3) as conversion
+    round(tab.leads_count / tab.visitors_count * 100, 3) as lcr,
+    round(tab.purchases_count / tab.leads_count * 100, 3) as pcr,
+    round(
+        tab.purchases_count / tab.visitors_count * 100, 3
+    ) as cnvrsn
 from tab;
 
 --Расчет cpu, cpl, cppu, roi
@@ -787,10 +798,14 @@ lpcr as (
 )
 
 select
-    round((sum(lpcr.total_cost)/sum(lpcr.visitors_count::numeric)), 0) as cpu,
-    round((sum(lpcr.total_cost)/sum(lpcr.leads_count::numeric)), 0) as cpl,
-    round((sum(lpcr.total_cost)/sum(lpcr.purchases_count::numeric)), 0) as cppu,
-    round(((sum(lpcr.revenue) - sum(lpcr.total_cost))/sum(lpcr.total_cost)), 0) as roi
+    round((sum(lpcr.total_cost) / sum(lpcr.visitors_count::numeric)), 0) as cpu,
+    round((sum(lpcr.total_cost) / sum(lpcr.leads_count::numeric)), 0) as cpl,
+    round(
+        (sum(lpcr.total_cost) / sum(lpcr.purchases_count::numeric)), 0
+    ) as cppu,
+    round(
+        ((sum(lpcr.revenue) - sum(lpcr.total_cost)) / sum(lpcr.total_cost)), 0
+    ) as roi
 from lpcr;
 
 --Создание представления aggregate_costs_mplkv

@@ -12,23 +12,23 @@ order by 1, 2, 3;
 
 --Посещения по платн каналам в разрезе источников для pie chart
 select
-    source,
-    to_char(visit_date, 'month-YYYY') as visit_month,
-    count(visitor_id) as visitors_count
-from sessions
-where medium != 'organic'
-group by to_char(visit_date, 'month-YYYY'), source
-order by to_char(visit_date, 'month-YYYY'), source;
+    s.source,
+    to_char(s.visit_date, 'month-YYYY') as visit_month,
+    count(s.visitor_id) as visitors_count
+from sessions as s
+where s.medium != 'organic'
+group by visit_month, s.source
+order by visit_month, s.source;
 
 --Посещения по беспл каналам в разрезе источников для pie chart
 select
-    source,
-    to_char(visit_date, 'month-YYYY') as visit_month,
-    count(visitor_id) as visitors_count
-from sessions
-where medium = 'organic'
-group by to_char(visit_date, 'month-YYYY'), source
-order by to_char(visit_date, 'month-YYYY'), source;
+    s.source,
+    to_char(s.visit_date, 'month-YYYY') as visit_month,
+    count(s.visitor_id) as visitors_count
+from sessions as s
+where s.medium = 'organic'
+group by visit_month, s.source
+order by visit_month, s.source;
 
 -- Расчет метрик cpu, cpl, cppu, roi по vk, ya за июнь 2023 г.
 with t as (
@@ -49,7 +49,9 @@ with t as (
             s.visitor_id = l.visitor_id
             and s.visit_date <= l.created_at
     where s.medium != 'organic'
-    order by s.visitor_id asc, s.visit_date desc
+    order by
+        s.visitor_id asc,
+        s.visit_date desc
 ),
 
 last_paid_click as (
@@ -130,30 +132,32 @@ ya as (
         utm_source,
         utm_medium,
         utm_campaign
-), lpcr as (
-	select
-    	lpcr.visit_date,
-    	lpcr.utm_source,
-    	lpcr.utm_medium,
-    	lpcr.utm_campaign,
-    	lpcr.visitors_count,
-    	lpcr.leads_count,
-    	lpcr.purchases_count,
-    	lpcr.revenue,
-    	coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
-	from last_paid_click_revenue as lpcr
-	left join vk
-    	on
-        	lpcr.visit_date = vk.campaign_date
-        	and lpcr.utm_source = vk.utm_source
-        	and lpcr.utm_medium = vk.utm_medium
-        	and lpcr.utm_campaign = vk.utm_campaign
-	left join ya
-    	on
-        	lpcr.visit_date = ya.campaign_date
-        	and lpcr.utm_source = ya.utm_source
-        	and lpcr.utm_medium = ya.utm_medium
-        	and lpcr.utm_campaign = ya.utm_campaign
+),
+
+lpcr as (
+    select
+        lpcr.visit_date,
+        lpcr.utm_source,
+        lpcr.utm_medium,
+        lpcr.utm_campaign,
+        lpcr.visitors_count,
+        lpcr.leads_count,
+        lpcr.purchases_count,
+        lpcr.revenue,
+        coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+    from last_paid_click_revenue as lpcr
+    left join vk
+        on
+            lpcr.visit_date = vk.campaign_date
+            and lpcr.utm_source = vk.utm_source
+            and lpcr.utm_medium = vk.utm_medium
+            and lpcr.utm_campaign = vk.utm_campaign
+    left join ya
+        on
+            lpcr.visit_date = ya.campaign_date
+            and lpcr.utm_source = ya.utm_source
+            and lpcr.utm_medium = ya.utm_medium
+            and lpcr.utm_campaign = ya.utm_campaign
 )
 
 select
@@ -186,7 +190,10 @@ with last_paid_click as (
         l.closing_reason,
         l.status_id
     from sessions as s
-    left join leads as l on s.visitor_id = l.visitor_id
+    left join leads as l
+        on
+            s.visitor_id = l.visitor_id
+            and s.visit_date <= l.created_at
     where s.medium != 'organic'
     order by s.visitor_id asc, s.visit_date desc
 )

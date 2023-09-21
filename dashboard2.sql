@@ -12,7 +12,7 @@ left join leads as l
     on
         s.visitor_id = l.visitor_id
         and s.visit_date <= l.created_at;
-    
+
 --Количество зарегистрированных пользователей
 select count(distinct l.lead_id) as leads_count
 from sessions as s
@@ -256,29 +256,29 @@ ya as (
 ),
 
 lpcr as (
-	select
-    	lpcr.visit_date,
-    	lpcr.utm_source,
-    	lpcr.utm_medium,
-    	lpcr.utm_campaign,
-    	lpcr.visitors_count,
-    	lpcr.leads_count,
-    	lpcr.purchases_count,
-    	lpcr.revenue,
-    	coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
-	from last_paid_click_revenue as lpcr
-	left join vk
-    	on
-        	lpcr.visit_date = vk.campaign_date
-        	and lpcr.utm_source = vk.utm_source
-        	and lpcr.utm_medium = vk.utm_medium
-        	and lpcr.utm_campaign = vk.utm_campaign
-	left join ya
-    	on
-        	lpcr.visit_date = ya.campaign_date
-        	and lpcr.utm_source = ya.utm_source
-        	and lpcr.utm_medium = ya.utm_medium
-        	and lpcr.utm_campaign = ya.utm_campaign
+    select
+        lpcr.visit_date,
+        lpcr.utm_source,
+        lpcr.utm_medium,
+        lpcr.utm_campaign,
+        lpcr.visitors_count,
+        lpcr.leads_count,
+        lpcr.purchases_count,
+        lpcr.revenue,
+        coalesce(vk.daily_spent, ya.daily_spent, 0) as total_cost
+    from last_paid_click_revenue as lpcr
+    left join vk
+        on
+            lpcr.visit_date = vk.campaign_date
+            and lpcr.utm_source = vk.utm_source
+            and lpcr.utm_medium = vk.utm_medium
+            and lpcr.utm_campaign = vk.utm_campaign
+    left join ya
+        on
+            lpcr.visit_date = ya.campaign_date
+            and lpcr.utm_source = ya.utm_source
+            and lpcr.utm_medium = ya.utm_medium
+            and lpcr.utm_campaign = ya.utm_campaign
 )
 
 select
@@ -287,5 +287,5 @@ select
     sum(lpcr.total_cost) as total_cost
 from lpcr
 where lpcr.total_cost != 0
-group by 1, 2
-order by 1, 2;
+group by lpcr.visit_date, lpcr.utm_source
+order by lpcr.visit_date, lpcr.utm_source;

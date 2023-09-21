@@ -55,12 +55,7 @@ with t as (
 last_paid_click as (
     select *
     from t
-    order by
-        amount desc nulls last,
-        visit_date asc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+    order by 8 desc nulls last, 2 asc, 3 asc, 4 asc, 5 asc
 ),
 
 last_paid_click_revenue as (
@@ -179,20 +174,20 @@ with last_paid_click as (
 )
 
 select *
-from last_paid_click as lpc
+from last_paid_click
 order by
-    lpc.amount desc nulls last,
-    lpc.visit_date asc,
-    lpc.utm_source asc,
-    lpc.utm_medium asc,
-    lpc.utm_campaign asc;
+    last_paid_click.amount desc nulls last,
+    last_paid_click.visit_date asc,
+    last_paid_click.utm_source asc,
+    last_paid_click.utm_medium asc,
+    last_paid_click.utm_campaign asc;
 
 --Доходы и расходы за июнь 2023 г.
 select
     sum(ac.total_cost) as total_cost,
     sum(ac.revenue) as revenue
 from aggregate_costs_mplkv as ac
-group by date_trunc('month', ac.visit_date);
+group by ac.visit_date;
 
 --Расчет конверсии из клика в лида, в продажу, всей воронки
 with tab as (
@@ -246,12 +241,7 @@ with t as (
 last_paid_click as (
     select *
     from t
-    order by
-        t.amount desc nulls last,
-        t.visit_date asc,
-        t.utm_source asc,
-        t.utm_medium asc,
-        t.utm_campaign asc
+    order by 8 desc nulls last, 2 asc, 3 asc, 4 asc, 5 asc
 ),
 
 last_paid_click_revenue as (

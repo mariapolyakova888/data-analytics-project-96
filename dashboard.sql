@@ -175,19 +175,14 @@ with last_paid_click as (
 
 select *
 from last_paid_click
-order by
-    last_paid_click.amount desc nulls last,
-    last_paid_click.visit_date asc,
-    last_paid_click.utm_source asc,
-    last_paid_click.utm_medium asc,
-    last_paid_click.utm_campaign asc;
+order by 8 desc nulls last, 2 asc, 3 asc, 4 asc, 5 asc;
 
 --Доходы и расходы за июнь 2023 г.
 select
-    sum(ac.total_cost) as total_cost,
-    sum(ac.revenue) as revenue
-from aggregate_costs_mplkv as ac
-group by ac.visit_date;
+    sum(total_cost) as total_cost,
+    sum(revenue) as revenue
+from aggregate_costs_mplkv
+group by 1;
 
 --Расчет конверсии из клика в лида, в продажу, всей воронки
 with tab as (

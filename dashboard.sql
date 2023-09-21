@@ -17,8 +17,8 @@ select
     count(s.visitor_id) as visitors_count
 from sessions as s
 where s.medium != 'organic'
-group by visit_month, s.source
-order by visit_month, s.source;
+group by 2, 1
+order by 2, 1;
 
 --Посещения по беспл каналам в разрезе источников для pie chart
 select
@@ -27,8 +27,8 @@ select
     count(s.visitor_id) as visitors_count
 from sessions as s
 where s.medium = 'organic'
-group by visit_month, s.source
-order by visit_month, s.source;
+group by 2, 1
+order by 2, 1;
 
 -- Расчет метрик cpu, cpl, cppu, roi по vk, ya за июнь 2023 г.
 with t as (
@@ -49,9 +49,7 @@ with t as (
             s.visitor_id = l.visitor_id
             and s.visit_date <= l.created_at
     where s.medium != 'organic'
-    order by
-        s.visitor_id asc,
-        s.visit_date desc
+    order by 1 asc, 1 desc
 ),
 
 last_paid_click as (
@@ -88,18 +86,8 @@ last_paid_click_revenue as (
             end
         ) as revenue
     from last_paid_click
-    group by
-        date_trunc('day', visit_date)::date,
-        utm_source,
-        utm_medium,
-        utm_campaign
-    order by
-        revenue desc nulls last,
-        visit_date asc,
-        visitors_count desc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+    group by 1, 2, 3, 4
+    order by 8 desc nulls last, 1 asc, 5 desc, 2 asc, 3 asc, 4 asc
 ),
 
 vk as (
@@ -111,11 +99,7 @@ vk as (
         sum(daily_spent) as daily_spent
     from vk_ads
     where utm_medium != 'organic'
-    group by
-        date_trunc('day', campaign_date)::date,
-        utm_source,
-        utm_medium,
-        utm_campaign
+    group by 1, 2, 3, 4
 ),
 
 ya as (
@@ -127,11 +111,7 @@ ya as (
         sum(daily_spent) as daily_spent
     from ya_ads
     where utm_medium != 'organic'
-    group by
-        date_trunc('day', campaign_date)::date,
-        utm_source,
-        utm_medium,
-        utm_campaign
+    group by 1, 2, 3, 4
 ),
 
 lpcr as (
@@ -195,24 +175,24 @@ with last_paid_click as (
             s.visitor_id = l.visitor_id
             and s.visit_date <= l.created_at
     where s.medium != 'organic'
-    order by s.visitor_id asc, s.visit_date desc
+    order by 1 asc, 2 desc
 )
 
 select *
-from last_paid_click
+from last_paid_click as lpc
 order by
-    amount desc nulls last,
-    visit_date asc,
-    utm_source asc,
-    utm_medium asc,
-    utm_campaign asc;
+    lpc.amount desc nulls last,
+    lpc.visit_date asc,
+    lpc.utm_source asc,
+    lpc.utm_medium asc,
+    lpc.utm_campaign asc;
 
 --Доходы и расходы за июнь 2023 г.
 select
-    sum(total_cost) as total_cost,
-    sum(revenue) as revenue
-from aggregate_costs_mplkv
-group by date_trunc('month', visit_date);
+    sum(ac.total_cost) as total_cost,
+    sum(ac.revenue) as revenue
+from aggregate_costs_mplkv as ac
+group by date_trunc('month', ac.visit_date);
 
 --Расчет конверсии из клика в лида, в продажу, всей воронки
 with tab as (
@@ -260,18 +240,18 @@ with t as (
             s.visitor_id = l.visitor_id
             and s.visit_date <= l.created_at
     where s.medium != 'organic'
-    order by s.visitor_id asc, s.visit_date desc
+    order by 1 asc, 2 desc
 ),
 
 last_paid_click as (
     select *
     from t
     order by
-        amount desc nulls last,
-        visit_date asc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+        t.amount desc nulls last,
+        t.visit_date asc,
+        t.utm_source asc,
+        t.utm_medium asc,
+        t.utm_campaign asc
 ),
 
 last_paid_click_revenue as (
@@ -297,18 +277,8 @@ last_paid_click_revenue as (
             end
         ) as revenue
     from last_paid_click
-    group by
-        date_trunc('day', visit_date)::date,
-        utm_source,
-        utm_medium,
-        utm_campaign
-    order by
-        revenue desc nulls last,
-        visit_date asc,
-        visitors_count desc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
+    group by 1, 2, 3, 4
+    order by 8 desc nulls last, 1 asc, 5 desc, 2 asc, 3 asc, 4 asc
 ),
 
 vk as (
@@ -320,11 +290,7 @@ vk as (
         sum(daily_spent) as daily_spent
     from vk_ads
     where utm_medium != 'organic'
-    group by
-        date_trunc('day', campaign_date)::date,
-        utm_source,
-        utm_medium,
-        utm_campaign
+    group by 1, 2, 3, 4
 ),
 
 ya as (
@@ -336,11 +302,7 @@ ya as (
         sum(daily_spent) as daily_spent
     from ya_ads
     where utm_medium != 'organic'
-    group by
-        date_trunc('day', campaign_date)::date,
-        utm_source,
-        utm_medium,
-        utm_campaign
+    group by 1, 2, 3, 4
 ),
 
 lpcr as (

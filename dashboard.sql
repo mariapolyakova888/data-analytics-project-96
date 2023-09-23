@@ -2,8 +2,8 @@
 select
     to_char(visit_date, 'DD-MM-YYYY') as visit_date,
     case
-        when medium = 'organic' then 'organic'
         when medium != 'organic' then 'paid_channel'
+        else 'organic'
     end as channel,
     count(visitor_id) as visitors_count
 from sessions
@@ -52,12 +52,6 @@ with t as (
     order by 1 asc, 1 desc
 ),
 
-last_paid_click as (
-    select *
-    from t
-    order by 8 desc nulls last, 2 asc, 3 asc, 4 asc, 5 asc
-),
-
 last_paid_click_revenue as (
     select
         date_trunc('day', visit_date)::date as visit_date,
@@ -80,7 +74,7 @@ last_paid_click_revenue as (
                     then amount
             end
         ) as revenue
-    from last_paid_click
+    from t
     group by 1, 2, 3, 4
     order by 8 desc nulls last, 1 asc, 5 desc, 2 asc, 3 asc, 4 asc
 ),
@@ -148,8 +142,6 @@ where lpcr.total_cost != 0
 group by 1
 order by 1;
 
-
-
 --Создание представления - модель Last Paid Click
 create view last_paid_click_mplkv as
 with last_paid_click as (
@@ -199,15 +191,15 @@ with tab as (
         ) as purchases_count
     from sessions as s
     left join leads as l
-        on s.visitor_id = l.visitor_id and s.visit_date <= l.created_at
+        on s.visitor_id = l.visitor_id
     group by 1
 )
 
 select
-    round(tab.leads_count / tab.visitors_count * 100, 3) as lcr,
-    round(tab.purchases_count / tab.leads_count * 100, 3) as pcr,
+    round(tab.leads_count * 100.00 / tab.visitors_count, 3) as lcr,
+    round(tab.purchases_count * 100.00 / tab.leads_count, 3) as pcr,
     round(
-        tab.purchases_count / tab.visitors_count * 100, 3
+        tab.purchases_count * 100.00 / tab.visitors_count, 3
     ) as cnvrsn
 from tab;
 
@@ -233,12 +225,6 @@ with t as (
     order by 1 asc, 2 desc
 ),
 
-last_paid_click as (
-    select *
-    from t
-    order by 8 desc nulls last, 2 asc, 3 asc, 4 asc, 5 asc
-),
-
 last_paid_click_revenue as (
     select
         date_trunc('day', visit_date)::date as visit_date,
@@ -261,7 +247,7 @@ last_paid_click_revenue as (
                     then amount
             end
         ) as revenue
-    from last_paid_click
+    from t
     group by 1, 2, 3, 4
     order by 8 desc nulls last, 1 asc, 5 desc, 2 asc, 3 asc, 4 asc
 ),

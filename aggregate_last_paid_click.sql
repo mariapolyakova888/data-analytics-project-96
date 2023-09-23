@@ -20,17 +20,6 @@ with t as (
     order by s.visitor_id asc, s.visit_date desc
 ),
 
-last_paid_click as (
-    select *
-    from t
-    order by
-        amount desc nulls last,
-        visit_date asc,
-        utm_source asc,
-        utm_medium asc,
-        utm_campaign asc
-),
-
 last_paid_click_revenue as (
     select
         date_trunc('day', visit_date)::date as visit_date,
@@ -53,7 +42,7 @@ last_paid_click_revenue as (
                     then amount
             end
         ) as revenue
-    from last_paid_click
+    from t
     group by
         date_trunc('day', visit_date)::date,
         utm_source,
